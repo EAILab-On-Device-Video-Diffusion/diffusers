@@ -395,7 +395,7 @@ class StableVideoDiffusionReduceChannelsPipeline(DiffusionPipeline):
         from diffusers import StableVideoDiffusionReduceChannelsPipeline
         from diffusers.utils import load_image, export_to_video
 
-        pipe = StableVideoDiffusionReduceChannelsPipeline.from_pretrained("stabilityai/stable-video-diffusion-img2vid-xt", torch_dtype=torch.float16, variant="fp16")
+        pipe = .from_pretrained("stabilityai/stable-video-diffusion-img2vid-xt", torch_dtype=torch.float16, variant="fp16")
         pipe.to("cuda")
 
         image = load_image("https://lh3.googleusercontent.com/y-iFOHfLTwkuQSUegpwDdgKmOjRSTvPxat63dQLB25xkTs4lhIbRUFeNBWZzYf370g=s1200")
