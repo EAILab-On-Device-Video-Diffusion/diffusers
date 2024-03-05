@@ -28,6 +28,18 @@ from ...utils import BaseOutput, logging
 from ...utils.torch_utils import is_compiled_module, randn_tensor
 from ..pipeline_utils import DiffusionPipeline
 
+# Debugging code
+import time
+import tracemalloc
+def profile(header, func, *args, **kwargs):
+    GB = 1024**3
+    start_time = time.time(); torch.cuda.reset_max_memory_allocated(); #tracemalloc.reset_peak()
+    result = func(*args, **kwargs)
+    end_time = time.time(); gpu_peak_memory = torch.cuda.max_memory_allocated() / GB; # cpu_peak_memory = tracemalloc.get_traced_memory()[1] / GB
+    print(f"[{header}] gpu peak memory: {gpu_peak_memory:.2f} GB")
+    # print(f"cpu peak memory: {cpu_peak_memory:.2f} GB")
+    print(f"[{header}] time taken: {(end_time - start_time):.2f} seconds")
+    return result
 
 logger = logging.get_logger(__name__)  # pylint: disable=invalid-name
 
@@ -443,12 +455,13 @@ class StableVideoDiffusionPipeline(DiffusionPipeline):
         if needs_upcasting:
             self.vae.to(dtype=torch.float32)
 
-        image_latents = self._encode_vae_image(
-            image,
-            device=device,
-            num_videos_per_prompt=num_videos_per_prompt,
-            do_classifier_free_guidance=self.do_classifier_free_guidance,
-        )
+        image_latents = profile("encode_vae_image", 
+                                self._encode_vae_image, 
+                                image, 
+                                device, 
+                                num_videos_per_prompt, 
+                                self.do_classifier_free_guidance)
+
         image_latents = image_latents.to(image_embeddings.dtype)
 
         # cast back to fp16 if needed
@@ -541,7 +554,13 @@ class StableVideoDiffusionPipeline(DiffusionPipeline):
             # cast back to fp16 if needed
             if needs_upcasting:
                 self.vae.to(dtype=torch.float16)
-            frames = self.decode_latents(latents, num_frames, decode_chunk_size)
+            
+            frames = profile("decode_latents", 
+                             self.decode_latents, 
+                             latents, 
+                             num_frames, 
+                             decode_chunk_size)
+            # frames = self.decode_latents(latents, num_frames, decode_chunk_size)
             frames = tensor2vid(frames, self.image_processor, output_type=output_type)
         else:
             frames = latents

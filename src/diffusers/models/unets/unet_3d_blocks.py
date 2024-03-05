@@ -34,6 +34,18 @@ from ..transformers.transformer_temporal import (
     TransformerTemporalModel,
 )
 
+# Debugging code
+import time
+import tracemalloc
+def profile(header, func, *args, **kwargs):
+    GB = 1024**3
+    start_time = time.time(); torch.cuda.reset_max_memory_allocated(); #tracemalloc.reset_peak()
+    result = func(*args, **kwargs)
+    end_time = time.time(); gpu_peak_memory = torch.cuda.max_memory_allocated() / GB; # cpu_peak_memory = tracemalloc.get_traced_memory()[1] / GB
+    print(f"[{header}] gpu peak memory: {gpu_peak_memory:.2f} GB")
+    # print(f"cpu peak memory: {cpu_peak_memory:.2f} GB")
+    print(f"[{header}] time taken: {(end_time - start_time):.2f} seconds")
+    return result
 
 def get_down_block(
     down_block_type: str,
@@ -1950,18 +1962,31 @@ class UNetMidBlockSpatioTemporal(nn.Module):
                     **ckpt_kwargs,
                 )
             else:
-                hidden_states = attn(
+                hidden_states = profile("MidBlockSpatioTemporal-attn-forward",
+                    attn,
                     hidden_states,
                     encoder_hidden_states=encoder_hidden_states,
                     image_only_indicator=image_only_indicator,
                     return_dict=False,
                 )[0]
-                hidden_states = resnet(
+                hidden_states = profile(
+                    "MidBlockSpatioTemporal-resnet-forward",
+                    resnet,
                     hidden_states,
                     temb,
                     image_only_indicator=image_only_indicator,
                 )
-
+                # hidden_states = attn(
+                #     hidden_states,
+                #     encoder_hidden_states=encoder_hidden_states,
+                #     image_only_indicator=image_only_indicator,
+                #     return_dict=False,
+                # )[0]
+                # hidden_states = resnet(
+                #     hidden_states,
+                #     temb,
+                #     image_only_indicator=image_only_indicator,
+                # )
         return hidden_states
 
 
@@ -2038,11 +2063,11 @@ class DownBlockSpatioTemporal(nn.Module):
                         image_only_indicator,
                     )
             else:
-                hidden_states = resnet(
-                    hidden_states,
-                    temb,
-                    image_only_indicator=image_only_indicator,
-                )
+                hidden_states = profile("DownBlockSpatioTemporal-resnet-forward",
+                                        resnet,
+                                        hidden_states,
+                                        temb,
+                                        image_only_indicator=image_only_indicator)
 
             output_states = output_states + (hidden_states,)
 
@@ -2154,17 +2179,17 @@ class CrossAttnDownBlockSpatioTemporal(nn.Module):
                     return_dict=False,
                 )[0]
             else:
-                hidden_states = resnet(
-                    hidden_states,
-                    temb,
-                    image_only_indicator=image_only_indicator,
-                )
-                hidden_states = attn(
-                    hidden_states,
-                    encoder_hidden_states=encoder_hidden_states,
-                    image_only_indicator=image_only_indicator,
-                    return_dict=False,
-                )[0]
+                hidden_states = profile("CrossAttnDownBlockSpatioTemporal-resnet-forward",
+                                        resnet,
+                                        hidden_states,
+                                        temb,
+                                        image_only_indicator=image_only_indicator)
+                hidden_states = profile("CrossAttnDownBlockSpatioTemporal-attn-forward",
+                                        attn,
+                                        hidden_states,
+                                        encoder_hidden_states=encoder_hidden_states,
+                                        image_only_indicator=image_only_indicator,
+                                        return_dict=False)[0]
 
             output_states = output_states + (hidden_states,)
 
@@ -2253,11 +2278,11 @@ class UpBlockSpatioTemporal(nn.Module):
                         image_only_indicator,
                     )
             else:
-                hidden_states = resnet(
-                    hidden_states,
-                    temb,
-                    image_only_indicator=image_only_indicator,
-                )
+                hidden_states = profile("UpBlockSpatioTemporal-resnet-forward",
+                                        resnet,
+                                        hidden_states,
+                                        temb,
+                                        image_only_indicator=image_only_indicator)
 
         if self.upsamplers is not None:
             for upsampler in self.upsamplers:
@@ -2365,20 +2390,23 @@ class CrossAttnUpBlockSpatioTemporal(nn.Module):
                     return_dict=False,
                 )[0]
             else:
-                hidden_states = resnet(
-                    hidden_states,
-                    temb,
-                    image_only_indicator=image_only_indicator,
-                )
-                hidden_states = attn(
-                    hidden_states,
-                    encoder_hidden_states=encoder_hidden_states,
-                    image_only_indicator=image_only_indicator,
-                    return_dict=False,
-                )[0]
-
+                hidden_states = profile("CrossAttnUpBlockSpatioTemporal-resnet-forward",
+                                        resnet,
+                                        hidden_states,
+                                        temb,
+                                        image_only_indicator=image_only_indicator)
+                hidden_states = profile("CrossAttnUpBlockSpatioTemporal-attn-forward",
+                                        attn,
+                                        hidden_states,
+                                        encoder_hidden_states=encoder_hidden_states,
+                                        image_only_indicator=image_only_indicator,
+                                        return_dict=False)[0]          
+                  
         if self.upsamplers is not None:
             for upsampler in self.upsamplers:
-                hidden_states = upsampler(hidden_states)
+                hidden_states = profile("CrossAttnUpBlockSpatioTemporal-upsampler",
+                                        upsampler,
+                                        hidden_states)
+                # hidden_states = upsampler(hidden_states)
 
         return hidden_states
